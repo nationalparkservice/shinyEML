@@ -1,9 +1,11 @@
 library(shiny)
 library(NPSdataverse)
+library(NPSdatastore)
 library(bslib)
 library(shinyBS)
 #sure would be nice to get rid fo this dependency at some point
 library(DSbulkUploadR)
+library(reactable)
 
 ui <- page_sidebar(
   
@@ -135,6 +137,7 @@ ui <- page_sidebar(
 # ---- Server ----
 server <- function(input, output, session) {
   data <- highLevelServer("high_level")  # Call the server module that returns high-level metadata
+  people <- peopleServer("people") # Call the server module that deals with people
   tables <- tableMetadataServer("table_metadata")
   output$module_test <- renderPrint(tables())  # for testing/demo
 }

@@ -1,12 +1,13 @@
 peopleInput <- function(id) {
   layout_columns(
     card(
-      card_header("Authors (email)"),
-      textInput(NS(id, "authors"),
-                placeholder = "Enter an email address ending in nps.gov",
-                label = NULL,
-                width = "100%",
-                updateOn = "blur"),
+      card_header("NPS Authors (email)"),
+      selectizeInput("authors",
+                     label = NULL,
+                     multiple = TRUE,
+                     choices = NULL,
+                     options = list(create = TRUE),
+                     width = "100%"),
       helpText("Authors must be individuals (not organizations) and must ",
                "have ORCIDs. See NPS IMD guidance on ",
                a("best practices for authorship",
@@ -15,24 +16,9 @@ peopleInput <- function(id) {
                              "-authorship.aspx?csf=1&web=1&e=ll809Q"),
                target = "_blank"),
                " for additional information."),
-      actionButton("author_help", "Show/Hide Help", class = "btn-info btn-sm"),
-      
-      div(
-        id = "author_help_section",
-        class = "collapse mt-2",
-        helpText("Debating show/hide help functionality. I like the cleaner, ",
-                 "simpler look of hidden help text. But I also want people to ",
-                 HTML("<b>freaking see</b>"),
-                 " the help text!")
-      ),
-      textOutput("validated_authors"),
+      reactable::reactableOutput("valid_authors", width = "100%"),
+      fill = FALSE
     ),
-    # Small script to toggle collapse
-    tags$script(HTML("
-    $('#author_help').on('click', function() {
-      $('#author_help_section').collapse('toggle');
-    });
-  ")),
     card(
       card_header("Contacts"),
       textInput(NS(id, "contacts"),
@@ -74,29 +60,23 @@ peopleInput <- function(id) {
 
 peopleServer <- function(id) {
   moduleServer(id, function(input, output, session) {
-    reactive({
-      output$validated_authors <- renderText({
-        #require input before proceeding with output:
-        req(input$authors)
-        
-        #test metadata filename for special characters
-        if (DSbulkUploadR::check_author_email(textInput$authors)) {
-          #ack.  This one is tough because this isn't technically a requirement.
-          #need to probably re-write some of these functions. What about 
-          #something that first does a grepl for nps.gov at the end and 
-          #if it exists, then tests for orcids?
-          #also will need to insure at least one author has an orcid.
-          #but also ability to add in orcids manually for authors that are
-          #not part of NPS.
-          validate(paste0("Authors must be NPS employees or partners."))
-        } else {
-        #generate tentative metadata file name output
-        paste0("Your metadata filename will be: ",
-               input$metadata_name, 
-               "_metadata.xml")
-          }
-      })
-    })
+    
+    #---- Validate emails of reference authors ----
+    valid_authors <- reactive({
+      if (length(input$authors) > 0) {
+        valid_authors <- NPSdatastore::active_directory_lookup(emails = input$authors) |>
+          dplyr::mutate(Valid_TF = found & !disabled) |>
+          dplyr::mutate(Valid = ifelse(Valid_TF, "\u2713", "\u2715")) |>
+          dplyr::select(Valid_TF, Valid, Email = searchTerm, Name = cn)
+      } else {
+        valid_authors <- NA
+      }
+      valid_authors
+    }) |>
+      bindEvent(input$authors)
+    
+    output$valid_authors <- renderReactable(reactable(valid_authors()[, c("Valid", "Email", "Name")]))
+    
   })
 }
   
